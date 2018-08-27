@@ -1,0 +1,23 @@
+{
+  "name": "otus-activity-prediction",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drferreira/survey-quality-prediction.git"
+  },
+  "author": "Diogo Ferreira",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/drferreira/survey-quality-prediction/issues"
+  },
+  "homepage": "https://github.com/drferreira/survey-quality-prediction#readme",
+  "dependencies": {
+    "decision-tree": "0.3.1",
+    "express": "4.16.3"
+  }
+}
