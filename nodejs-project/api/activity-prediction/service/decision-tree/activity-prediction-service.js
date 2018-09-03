@@ -1,33 +1,68 @@
 'use strict';
 
 var DecisionTree = require('decision-tree');
-var activityPredictionDataBuild = require('./activity-prediction-data-build');
+var ActivityPredictionDataBuilder = require('./activity-prediction-data-build');
+var ActivityPredictionDao = require('../../dao/activity-prediction-dao');
+var PredictedActivityDao = require('../../dao/predicted-activity-dao');
+var DecisionTreeModel = require('../../model/decision-tree-model');
+var Activity = require('../../model/activity');
 
-exports.training = function (databaseForTraining, variableForPrediction, features) {
-    var database = activityPredictionDataBuild.buildActivityDatabase(databaseForTraining);
-    return new DecisionTree(database, variableForPrediction, features)
-};
+class ActivityPredictionService{
+    trainingActivity(databaseForTraining, activityJson) {
+        var activity = Activity.deserialize(activityJson);
+        var customIds = activity.getCustomIds();
+        customIds.forEach((customId) => {
+            var features = activity.getFeatures(customId);
+            this.trainingVariable(databaseForTraining, customId, features);
+        });
+    };
 
-exports.predictVariable = function (decisionTree, activityForPrediction, variableForPrediction) {
-    var predictionModel = activityPredictionDataBuild.buildActivity(activityForPrediction);
-    delete predictionModel[variableForPrediction];
-    return decisionTree.predicted(predictionModel);
-};
+    /**
+     * This function is responsible for training a particular variable based on a reference set.
+     * @param databaseForTraining Set of data that will be used as a reference for the construction of relationship rules.
+     * @param variableForPrediction Variable for prediction
+     * @param features Variables that will be applied to the model for reference during prediction.
+     */
+    trainingVariable(databaseForTraining, variableForPrediction, features) {
+        var activityPredictionDao = new ActivityPredictionDao();
+        var activityPredictionDataBuilder = new ActivityPredictionDataBuilder();
+        var database = activityPredictionDataBuilder.buildActivityDatabase(databaseForTraining);
 
-exports.predictAllVariables = function(activity) {
-    var predictedActivity = [];
-    activity.questions.forEach(function (question) {
-        var variableForPrediction = question.id;
-        var decisionTree = this.getDecisionTree(variableForPrediction);
-        var predicted = this.predictVariable(decisionTree, activity, variableForPrediction);
-        predictedActivity.push((question['predicted'] = predicted));
-    })
-};
+        var decisionTreeModel = new DecisionTreeModel(variableForPrediction, features);
+        var training = new DecisionTree(database, decisionTreeModel.target, decisionTreeModel.features);
+        decisionTreeModel.setTrainingResult(training);
 
-exports.getDecisionTree = function (variable) {
-    return [] // TODO return prediction database for all acronyns
-};
+        activityPredictionDao.persist(decisionTreeModel);
+    };
 
-exports.getPredictionModel = function (activity) {
-    return activityPredictionDataBuild.buildActivity(activity);
-};
+    predictVariable (decisionTree, activityForPrediction, variableForPrediction) {
+        var activityPredictionDataBuilder = new ActivityPredictionDataBuilder();
+        var predictionModel = activityPredictionDataBuilder.buildActivity(activityForPrediction);
+        delete predictionModel[variableForPrediction];
+        return new DecisionTree(decisionTree.data, decisionTree.target, decisionTree.features).predict(predictionModel);
+    };
+
+    predictActivity(activity) {
+        new Promise((resolve) => {
+            activity.questions.map(async (question) => {
+                var target = question.getCustomId();
+                var decisionTree = await this.getDecisionTree(target);
+                var decisionTree = decisionTree.getTraining();
+                var predicted = this.predictVariable(decisionTree, activity, target);
+                activity.addPrediction(target, predicted);
+                resolve(activity);
+            });
+        }).then(function (activity) {
+            var predictedActivityDao = new PredictedActivityDao(activity.acronym);
+            predictedActivityDao.persist(activity);
+        });
+    };
+
+    getDecisionTree(target) {
+        var activityPredictionDao = new ActivityPredictionDao();
+        return activityPredictionDao.getDecisionTree(target);
+    };
+}
+module.exports = ActivityPredictionService;
+
+

@@ -1,0 +1,10 @@
+{
+  "connection":{
+    "protocol":"mongodb",
+    "url":"35.192.143.65",
+    "port":"27017",
+    "user":"admin",
+    "password":"admin",
+    "databaseAuthentication": "otus-prediction-qc"
+  }
+}
